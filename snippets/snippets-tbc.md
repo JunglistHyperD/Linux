@@ -33,7 +33,7 @@ CMD: `zip -r <FILETOEXTRACT> $(find /opt/ibm/isim/ -name "*.jar")`
 `grep MemTotal /proc/meminfo` - Get the total ram/Memory of the system
 
 
-`for i in $(compgen -a); do alias $i ; done` # List all the aliases and the see what commmands they actually do
+`for i in $(compgen -a); do alias $i ; done` # List all the aliases and then see what commands they actually do
 
 
 
@@ -50,7 +50,7 @@ CMD: `zip -r <FILETOEXTRACT> $(find /opt/ibm/isim/ -name "*.jar")`
 `auth(.*)"(.*)"`# find the term "auth" followed by anything and then a pair of quotations marks with text within them
 
 
-`detect-secrets -C . scan > .secrets.basline` # Run detect secrts and make a basline file for the repo
+`detect-secrets -C . scan > .secrets.basline` # Run detect secrets and make a baseline file for the repo
 `detect-secrets audit .secrets.baseline`
 
 `trufflehog --regex <FULLPATHTOCODE>`

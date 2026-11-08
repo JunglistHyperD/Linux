@@ -102,7 +102,7 @@ alias kgs="kubectl get statefulsets"
 alias kcf="kubectl create -f"
 alias kdashinit="kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml"
 alias pyServe="python -m http.server 9999"          # creates a SimpleHTTPServer(2) on port 9999. This is the py3 version
-alias myip="dig TXT +short o-o.myaddr.l.google.com @ns1.google.com" # gets your local ip by bounceing off google
+alias myip="dig TXT +short o-o.myaddr.l.google.com @ns1.google.com" # gets your local ip by bouncing off google
 alias pub="cat .ssh/id_rsa.pub"
 alias nmap-scripts-list='nmap --script-help=all | grep '\''^[a-zA-Z0-9-]*$'\'' | grep -v '\''^$'\'
 alias ref="source ~/.bash_profile"
@@ -120,7 +120,7 @@ dfc () {
    echo "Stopping all docker containers ... "
    docker stop $(docker ps -a -q)
    echo "Removeing all excited containers ..."
-   docker rm $(docker ps -a -f status=exited -q)	     # remove all excited containers
+   docker rm $(docker ps -a -f status=exited -q)	     # remove all exited containers
    echo "Removeing all images ..."
    docker rmi $(docker images -a -q)		     # remove all images
 }

