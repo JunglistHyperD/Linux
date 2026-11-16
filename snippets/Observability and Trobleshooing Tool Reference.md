@@ -1,8 +1,8 @@
 # Observability Tool Reference — Chapter 4
 
-Every tool named in Gregg's Observability Tools chapter, sorted into its categories and drilled with the commands that matter — parameters shown in CAPITALS and explained. A standing reference to keep open while troubleshooting.
+Every tool named in Gregg's Observability Tools chapter, sorted into its categories and drilled with the commands that matter — parameters shown as `<CAPITALS>` and explained. A standing reference to keep open while troubleshooting.
 
-# How to read this guide
+## How to read this guide
 
 Every tool below carries a tag line using the chapter's own axes, so you can see at a glance what kind of instrument it is. The dimensions:
 
@@ -16,21 +16,24 @@ So a tag reading *system-wide · event-based (tracing) · dynamic · cost scales
 
 The four core buckets, mapped onto scope × data type:
 
-&#91;embedded content: tool buckets · scope × data type, with signature tools\]
+| | Counters (cheap, always on) | Events (profiling / tracing) |
+| --- | --- | --- |
+| **System-wide** | vmstat, mpstat, iostat, free, nstat, sar | perf, Ftrace, BCC, bpftrace, tcpdump |
+| **Per-process** | ps, top, pidstat, pmap | strace, gdb |
 
 Many tools straddle buckets — top(1) has a system-wide summary, and system-wide event tools usually filter to one PID — but the quadrant is the mental model: start in the cheap counter corners to localise, cross into events once you know where to point them.
 
 ---
 
-# System-wide counter tools
+## System-wide counter tools
 
 *Scope: system-wide · Data: fixed counters · Role: observability · Cost: free.* These read kernel counters (mostly from /proc) and summarise the whole machine. Cheap, always-available, and where every investigation starts. Most take an **\<INTERVAL\> \<COUNT\>** convention: print every \<INTERVAL\> seconds, \<COUNT\> times, then exit; the first line is usually a since-boot summary, so watch the *second* line onward for current activity.
 
-## vmstat
+### vmstat
 
 Virtual-memory, CPU, and I/O summary for the whole system on one line per interval. Your fastest read on swapping, run-queue length, and the user/system/idle CPU split.
 
-```
+```bash
 vmstat [-S <UNIT>] <INTERVAL> <COUNT>
 vmstat -S M 1 5
 ```
@@ -42,7 +45,7 @@ vmstat -S M 1 5
 
 **Reading the output** — sample from an idle Ubuntu VM:
 
-```
+```sh
 procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------
  r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu
  0  0      0  12181     83   2105    0    0   221    16 1151    2  1  1 98  0  0  0   <- since-boot average, ignore
@@ -73,15 +76,15 @@ Verdict on the sample: ~97% idle, no `wa`, no `st`, no swapping, ~12 GiB free �
 
 **In the field — has this box actually swapped since boot?**
 
-```
+```bash
 vmstat -s | grep -i swap
 ```
 
-## mpstat
+### mpstat
 
 Per-CPU utilisation breakdown — the tool that exposes a single hot core hiding inside a healthy-looking average.
 
-```
+```bash
 mpstat -P ALL <INTERVAL>
 mpstat -P ALL 1
 ```
@@ -92,7 +95,7 @@ mpstat -P ALL 1
 
 **Reading the output** — sample from an idle 2-vCPU Ubuntu VM (`mpstat -P ALL 1 3`):
 
-```
+```text
 07:12:13 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
 07:12:14 PM  all    0.52    0.00    1.05    0.00    0.00    1.05    0.00    0.00    0.00   97.38
 07:12:14 PM    0    1.04    0.00    1.04    0.00    0.00    1.04    0.00    0.00    0.00   96.88
@@ -119,26 +122,26 @@ Verdict on the sample: both cores ~97.5% idle and balanced, no iowait or steal �
 
 **In the field — is a NIC interrupt pinning one core?**
 
-```
+```bash
 mpstat -I SUM -P ALL 2
 ```
 
-What a problem looks like
+**What a problem looks like:**
 
-```
+```text
 CPU   %usr  %sys  %soft  %idle
 all   50.0   ...    ...   50.0     <- average looks fine
   0  100.0   0.0    0.0    0.0     <- one core pinned (single-threaded app)
   1    0.0   0.0    0.0  100.0
 ```
-Or one core with high %soft while the others idle. That points to network interrupts landing on one CPU. Check with mpstat -I SUM -P ALL 1 and cat /proc/interrupts.
 
+Or one core with high `%soft` while the others idle. That points to network interrupts landing on one CPU. Check with `mpstat -I SUM -P ALL 1` and `cat /proc/interrupts`.
 
-## iostat
+### iostat
 
 Per-disk I/O statistics from the block layer: IOPS, throughput, wait time, and percent busy.
 
-```
+```bash
 iostat -sxz <INTERVAL>
 iostat -sxz 1
 ```
@@ -151,7 +154,7 @@ iostat -sxz 1
 
 **Reading the output** — sample from an idle Ubuntu VM (`iostat -sxz -t 2 5 /dev/sda`):
 
-```
+```text
 11/12/2026 07:17:57 PM                                      <- -t timestamp
 avg-cpu:  %user   %nice %system %iowait  %steal   %idle
            0.69    0.03    1.14    0.01    0.00   98.12
@@ -187,15 +190,15 @@ Verdict on the sample: 1–2 tiny (4–6 KB) requests every couple of seconds, ~
 
 **In the field — one indexer's disk suspect during a bucket roll; timestamp it and watch just that device:**
 
-```
+```bash
 iostat -sxz -t 2 /dev/nvme1n1
 ```
 
-## free
+### free
 
 System memory usage, including the all-important file-system cache.
 
-```
+```bash
 free [-h | -m]
 free -m
 ```
@@ -206,15 +209,15 @@ free -m
 
 **In the field — watch the page cache shrink live as a search runs:**
 
-```
+```bash
 watch -n1 free -m
 ```
 
-## nstat
+### nstat
 
 TCP/IP stack counters — a cleaner, delta-based alternative to the legacy netstat statistics.
 
-```
+```bash
 nstat [-n | -a | -z] [<PATTERN>...]
 nstat
 nstat -a TcpOutSegs TcpRetransSegs
@@ -229,7 +232,7 @@ nstat -a TcpOutSegs TcpRetransSegs
 
 **In the field — measure TCP retransmits over a 10-second window:**
 
-```
+```bash
 nstat -n; sleep 10; nstat | grep -iE 'retrans|drop'
 ```
 
@@ -246,15 +249,15 @@ Baseline, wait, then print only what changed in those 10 s. No output = nothing 
 
 Judge retransmits as a ratio: `TcpRetransSegs` ÷ `TcpOutSegs` above ~1% on a LAN = real loss (cable/NIC, congested switch, duplex mismatch → `ethtool`). Listen/backlog drops are a server-side problem, not the network. nstat is system-wide — to find *which* connection, use `ss -ti` and check per-socket `retrans:`.
 
-# Per-process counter tools
+## Per-process counter tools
 
 *Scope: per-process · Data: fixed counters · Role: observability · Cost: free.* These read the kernel's per-PID counters (from /proc/\<PID\>) to show which processes are consuming what. Where you go once a system-wide tool says “CPU is busy” and you need to know *who*.
 
-## ps
+### ps
 
 A snapshot of process status and statistics — one shot, not a live feed. Best for scripting and for a quick sorted list.
 
-```
+```bash
 ps -eo pid,comm,%cpu,%mem,rss --sort=-%cpu
 ps aux --sort=-%cpu
 ```
@@ -269,7 +272,7 @@ ps aux --sort=-%cpu
 
 **Reading the output** — sample from an Ubuntu VM running Jenkins:
 
-```
+```text
     PID COMMAND         %CPU %MEM   RSS
    5837 ps               400  0.0  4492     <- ps measuring itself, ignore
    2383 java             0.8  2.5 418796    <- Jenkins: ~409 MiB resident, biggest real consumer
@@ -294,27 +297,27 @@ Extra columns in `ps aux`:
 
 **In the field — find what's stuck in `D` state (blocked on I/O):**
 
-```
+```bash
 ps -eo pid,stat,wchan:20,args | awk '$2 ~ /D/'
 ```
 
 **In the field — full command line and age of a suspect process:**
 
-```
+```bash
 ps -o pid,etime,time,rss,args -p <PID>
 ```
 
 **In the field — what's eating memory right now?**
 
-```
+```bash
 ps -eo pid,comm,rss,%mem --sort=-rss | head
 ```
 
-## top
+### top
 
 The live, auto-refreshing process table, sorted by CPU (or another key). Also carries a system-wide summary header, so it straddles the quadrant.
 
-```
+```bash
 top -p <PID>
 top -o %MEM
 ```
@@ -326,24 +329,21 @@ top -o %MEM
 
 **In the field — watch only the Splunk processes:**
 
-```
+```bash
 top -p $(pgrep -d, splunkd)
 ```
 
-
-## top: confirm and name the culprit
+#### top cheat sheet — confirm and name the culprit
 
 The overview. The header repeats the earlier checks, and the list shows which process is responsible. Press `1` for per-core view and `M` to sort by memory.
 
-```
+```bash
 top
 ```
 
-### top cheat sheet
-
 `top` is on every Linux box and answers one question: which process is using the machine? Read the header first, then sort the list. Keys are case-sensitive.
 
-### Reading the header
+##### Reading the header
 
 | Line | What it tells you |
 | --- | --- |
@@ -353,7 +353,7 @@ top
 | `MiB Mem` | Watch `avail Mem` (on the Swap line), not `free`. Cache is reclaimable |
 | `MiB Swap` | `used` rising over time means memory pressure |
 
-### Reading the columns
+##### Reading the columns
 
 | Column | Meaning |
 | --- | --- |
@@ -367,7 +367,7 @@ top
 
 Many processes in state `D` alongside high `wa` points to a disk problem.
 
-### Keys inside top
+##### Keys inside top
 
 | Key | Does |
 | --- | --- |
@@ -391,37 +391,37 @@ Many processes in state `D` alongside high `wa` points to a disk problem.
 | `W` | Save your layout for next time |
 | `q` | Quit |
 
-### Command-line options
+##### Command-line options
 
-```
+```bash
 top -b -n 1 | head -20
 ```
 
 One snapshot to paste into a ticket (`-b` batch mode, `-n 1` one iteration).
 
-```
+```bash
 top -u splunk
 ```
 
 Only the `splunk` user's processes.
 
-```
+```bash
 top -H -p $(pgrep -o splunkd)
 ```
 
 Threads of the oldest `splunkd` process.
 
-```
+```bash
 top -b -n 5 -d 2 > /tmp/top.txt
 ```
 
 Five samples, two seconds apart, saved to a file for later.
 
-## htop cheat sheet
+### htop cheat sheet
 
 `htop` shows the same data as `top` but is easier to drive: per-core bars on top, a scrolling process list, a function-key menu along the bottom, and mouse support. Install with `sudo apt install htop` if it is missing. Key names below match recent versions; press `F1` to check yours.
 
-### Function keys
+#### Function keys
 
 | Key | Does |
 | --- | --- |
@@ -435,7 +435,7 @@ Five samples, two seconds apart, saved to a file for later.
 | `F9` | Kill: pick a signal, 15 first, 9 last resort |
 | `F10` or `q` | Quit |
 
-### Other keys worth knowing
+#### Other keys worth knowing
 
 | Key | Does |
 | --- | --- |
@@ -453,7 +453,7 @@ Five samples, two seconds apart, saved to a file for later.
 | `a` | Pin a process to chosen CPU cores |
 | `F` | Follow the selected process as the list re-sorts |
 
-### Reading the display
+#### Reading the display
 
 - **CPU bars (top left):** one per core. Colours by default: blue low-priority, green normal user, red kernel. `F1` lists the rest, including I/O wait and steal in detailed mode.
 - **Mem and Swp bars:** green is used memory, blue buffers, yellow or orange cache. A full bar is normal if most of it is cache; look at the figures, not the bar length.
@@ -461,53 +461,50 @@ Five samples, two seconds apart, saved to a file for later.
 - **Load average and Uptime:** same as the `uptime` command.
 - **State column (`S`):** `R` running, `S` sleeping, `D` waiting on disk, `Z` zombie. Lots of `D` suggests an I/O problem.
 
-### Setup worth doing once (F2)
+#### Setup worth doing once (F2)
 
 1. **Display options:** turn on detailed CPU time so `iowait` and `steal` show in the bars.
 2. **Meters:** add Disk IO and Network IO to the header if your version offers them.
 3. **Columns:** add the I/O rate columns to see which process is hammering the disk.
 4. Settings save automatically to `~/.config/htop/htoprc`.
 
-### Command-line options
+#### Command-line options
 
-```
+```bash
 htop -u splunk
 ```
 
 Start showing only the `splunk` user's processes.
 
-```
+```bash
 htop -p 1234,5678
 ```
 
 Watch specific PIDs only.
 
-```
+```bash
 htop -t
 ```
 
 Start in tree view.
 
-```
+```bash
 htop -d 10
 ```
 
 Refresh every 1 second (the value is in tenths of a second).
 
-```
+```bash
 htop -s PERCENT_MEM
 ```
 
 Start sorted by memory (`htop --sort-key help` lists the column names).
 
-
-
-
-## pidstat
+### pidstat
 
 Per-process statistics *over an interval* — like a per-PID `mpstat`. Splits user vs system CPU time and can track I/O per process, which `top` doesn't do well.
 
-```
+```bash
 pidstat [-d] [-p <PID>] <INTERVAL>
 pidstat 1
 pidstat -d 1
@@ -520,15 +517,15 @@ pidstat -d 1
 
 **In the field — which thread of splunkd is burning CPU?**
 
-```
+```bash
 pidstat -t -p $(pgrep -o splunkd) 1
 ```
 
-## pmap
+### pmap
 
 Lists a process's memory mappings with per-segment usage — where its RSS actually lives (heap, stack, each mapped library or file).
 
-```
+```bash
 pmap -x <PID>
 pmap -x 18733
 ```
@@ -539,7 +536,7 @@ pmap -x 18733
 
 **Reading the output** — excerpt from `pmap -x` on a bash shell process `3542`:
 
-```
+```text
 3542:   bash
 Address           Kbytes     RSS   Dirty Mode  Mapping
 00005d90fbbdb000     192     192       0 r---- bash             <- headers / read-only data
@@ -569,7 +566,7 @@ total kB           11536    6020    1964
 
 **In the field — is a process's memory growing? Sample its total every 5s:**
 
-```
+```bash
 watch -n5 'pmap -x <PID> | tail -1'
 ```
 
@@ -577,20 +574,20 @@ Leak = `RSS`/`Dirty` climbing without plateauing, concentrated in `[ anon ]`.
 
 **In the field — biggest mappings, and the real cost in one look:**
 
-```
+```bash
 pmap -x <PID> | sort -k3 -n | tail -5
 grep -E '^(Rss|Pss|Private_Dirty)' /proc/<PID>/smaps_rollup
 ```
 
-# Profilers
+## Profilers
 
 *Data: event-based (sampling) · Role: observability · Cost: predictable.* Profilers take periodic samples — typically the instruction pointer or stack at a fixed rate — to paint a coarse picture of where time goes. Overhead is controllable because you choose the rate; the classic choice is 99 Hz, offset from round numbers to avoid sampling in lockstep with periodic activity.
 
-## perf (profiling mode)
+### perf (profiling mode)
 
 The standard Linux profiler. Samples CPU stacks system-wide or per-process and is the usual front end for turning a CPU problem into a flame graph. (perf also traces — see the tracer section.)
 
-```
+```bash
 perf record -F <HERTZ> -a -g -- sleep <SECONDS>
 perf record -F 99 -a -g -- sleep 30
 perf report
@@ -620,7 +617,7 @@ perf report
 
 **In the field — is a live process stalling on memory?** (needs PMCs; else *The cycles event is not supported*)
 
-```
+```bash
 sudo perf stat -e cycles,instructions,cache-misses -p <PID> -- sleep 10
 ```
 
@@ -628,7 +625,7 @@ Read `insn per cycle` (IPC): > ~1 = doing useful work; < ~1 with high `cache-mis
 
 **Reading the record output:**
 
-```
+```text
 [ perf record: Woken up 3 times to write data ]                  <- buffer flushed to disk 3x, routine
 [ perf record: Captured and wrote 1.831 MB perf.data (5940 samples) ]
 ```
@@ -639,7 +636,7 @@ Read `insn per cycle` (IPC): > ~1 = doing useful work; < ~1 with high `cache-mis
 
 **Flame graph:**
 
-```
+```bash
 git clone https://github.com/brendangregg/FlameGraph        # one-off; needs perl
 sudo perf script -f | ./FlameGraph/stackcollapse-perf.pl | ./FlameGraph/flamegraph.pl > cpu.svg
 xdg-open cpu.svg                                            # open in a browser — it's interactive
@@ -651,15 +648,15 @@ Reading it: each box is a function, the one above it is what it called; **width 
 
 **In the field — profile just the hottest splunkd for 30s:**
 
-```
+```bash
 perf record -F 99 -p $(pgrep -n splunkd) -g -- sleep 30
 ```
 
-## profile (BCC)
+### profile (BCC)
 
 A BPF-based CPU profiler that frequency-counts stacks *in the kernel* and emits folded output ready for a flame graph — lighter-weight than perf's record-to-file approach.
 
-```
+```bash
 profile [-F <HERTZ>] [-p <PID>] [<DURATION>]
 profile -F 99 30
 ```
@@ -671,15 +668,15 @@ profile -F 99 30
 
 **In the field — 10s folded CPU profile of one PID, ready for a flame graph:**
 
-```
+```bash
 profile -F 99 -p <PID> -f 10 > out.folded
 ```
 
-## gprof
+### gprof
 
 The GNU profiler for code you compile yourself. The program must be built with profiling instrumentation, so it's a developer tool, not a production one.
 
-```
+```bash
 gcc -pg -o <PROG> <PROG>.c  # compile with profiling
 ./<PROG>                    # run; writes gmon.out
 gprof <PROG> gmon.out
@@ -689,11 +686,11 @@ gprof <PROG> gmon.out
 - **gmon.out** — the data file the instrumented run drops in the working directory.
 - Reports a flat profile and a call graph with time per function.
 
-## cachegrind
+### cachegrind
 
 Part of the Valgrind toolkit; simulates the program to profile CPU-cache and branch behaviour. Very detailed, but runs the target far slower — analysis, not production.
 
-```
+```bash
 valgrind --tool=cachegrind ./<PROG>
 kcachegrind cachegrind.out.<PID>
 ```
@@ -706,11 +703,11 @@ kcachegrind cachegrind.out.<PID>
 
 **Real-world uses** — a developer tool, rarely an ops one: tuning hot code to be cache-friendly (line-level misses), deterministic regression benchmarks in CI (simulated, so identical counts every run — SQLite measures performance this way), comparing two versions of code (`cg_diff`), and getting cache data where hardware counters are absent (VMs). Can't attach to a running PID and runs 20–100× slower, so never on production — for a live process use `perf stat` (see perf section). Rule of thumb: own the source → cachegrind; diagnosing something running → perf.
 
-## Java Flight Recorder (JFR)
+### Java Flight Recorder (JFR)
 
 A language-level profiler built into the JVM that sees Java context (methods, allocations, GC) that a system profiler can't. The pattern recurs: managed runtimes often need their own profiler.
 
-```
+```bash
 java -XX:+FlightRecorder -XX:StartFlightRecording=duration=<SECONDS>s,filename=<FILE>.jfr -jar <APP>.jar
 ```
 
@@ -720,19 +717,19 @@ java -XX:+FlightRecorder -XX:StartFlightRecording=duration=<SECONDS>s,filename=<
 
 **In the field — attach to an already-running JVM without restarting it:**
 
-```
+```bash
 jcmd <PID> JFR.start duration=60s filename=/tmp/rec.jfr
 ```
 
-# System-wide tracers
+## System-wide tracers
 
-*Scope: system-wide · Data: event-based (tracing) · Role: observability · Cost: scales with event rate.* Tracers capture *every* event of interest. They see what counters and sampling miss, but overhead grows with the event rate — under \~10k events/sec is negligible, scheduler-rate events (100k+/sec) can hurt. Each tool's instrumentation type is tagged below.
+*Scope: system-wide · Data: event-based (tracing) · Role: observability · Cost: scales with event rate.* Tracers capture *every* event of interest. They see what counters and sampling miss, but overhead grows with the event rate — under ~10k events/sec is negligible, scheduler-rate events (100k+/sec) can hurt. Each tool's instrumentation type is tagged below.
 
-## tcpdump
+### tcpdump
 
 Captures network packets off an interface for detailed protocol analysis. Uses libpcap; carries CPU and storage cost, so filter tightly.
 
-```
+```bash
 tcpdump -i <IFACE> -w <FILE>.pcap <EXPRESSION>
 tcpdump -i eth0 -w capture.pcap 'tcp port 8089'
 ```
@@ -743,15 +740,15 @@ tcpdump -i eth0 -w capture.pcap 'tcp port 8089'
 
 **In the field — capture 100 forwarder→indexer S2S packets then stop:**
 
-```
+```bash
 tcpdump -i eth0 -c 100 'tcp port 9997'
 ```
 
-## execsnoop *(static or dynamic, via BCC/bpftrace)*
+### execsnoop *(static or dynamic, via BCC/bpftrace)*
 
 Prints every new process as it's created, by instrumenting the exec path. Catches short-lived processes that snapshot tools like top miss entirely.
 
-```
+```bash
 execsnoop [-t] [-n <NAME>]
 execsnoop -t
 ```
@@ -760,11 +757,11 @@ execsnoop -t
 - **-n \<NAME\>** — only show processes whose name matches \<NAME\>.
 - Great for spotting a cron job or script storm quietly stealing CPU.
 
-## biosnoop *(dynamic, via BCC/bpftrace)*
+### biosnoop *(dynamic, via BCC/bpftrace)*
 
 Traces each block-device I/O with the issuing process, size, and latency — the per-I/O disk visibility that was historically hard to get.
 
-```
+```bash
 biosnoop
 ```
 
@@ -773,15 +770,15 @@ biosnoop
 
 **In the field — show only block I/O slower than 10ms (the latency column is last):**
 
-```
+```bash
 biosnoop | awk 'NR==1 || $NF > 10'
 ```
 
-## perf trace
+### perf trace
 
 A perf subcommand that traces system calls (and other events) system-wide, a lower-overhead `strace` alternative.
 
-```
+```bash
 perf trace -e <EVENT>
 perf trace -e block:block_rq_issue
 ```
@@ -791,15 +788,15 @@ perf trace -e block:block_rq_issue
 
 **In the field — which syscalls dominate splunkd over 10s? (summary, not every line)**
 
-```
+```bash
 perf trace -s -p $(pgrep -o splunkd) -- sleep 10
 ```
 
-## Ftrace *(static + dynamic)*
+### Ftrace *(static + dynamic)*
 
 The kernel's built-in tracer — a multi-tool for function tracing and tracepoints, with no extra dependencies, ideal on locked-down or minimal systems. Usually driven via front-end scripts (the perf-tools collection) rather than raw tracefs.
 
-```
+```bash
 # raw interface lives under:
 /sys/kernel/debug/tracing/
 # e.g. enable a tracepoint:
@@ -810,15 +807,15 @@ echo 1 > events/block/block_rq_issue/enable
 
 **In the field — count TCP send-path kernel calls over 10s (perf-tools wrapper):**
 
-```
+```bash
 funccount -d 10 'tcp_send*'
 ```
 
-## BCC *(static + dynamic)*
+### BCC *(static + dynamic)*
 
 A BPF tracing toolkit — a library plus 100+ polished, production-grade tools (execsnoop, biosnoop, runqlat, ext4slower, cachestat…). Reach for BCC when you want a ready-made, battle-tested answer.
 
-```
+```bash
 /usr/share/bcc/tools/<TOOLNAME> [<ARGS>]
 /usr/share/bcc/tools/runqlat 10 1
 ```
@@ -828,15 +825,15 @@ A BPF tracing toolkit — a library plus 100+ polished, production-grade tools (
 
 **In the field — catch ext4 operations slower than 10ms:**
 
-```
+```bash
 ext4slower 10
 ```
 
-## bpftrace *(static + dynamic)*
+### bpftrace *(static + dynamic)*
 
 A high-level language for custom BPF one-liners and short scripts — when no existing tool answers your exact question. Concise enough to write at the keyboard mid-incident.
 
-```
+```bash
 bpftrace -e '<PROBE> { <ACTION> }'
 bpftrace -e 'kprobe:do_nanosleep { printf("sleep by: %s\n", comm); }'
 bpftrace -l '<PATTERN>'
@@ -848,19 +845,19 @@ bpftrace -l '<PATTERN>'
 
 **In the field — count syscalls by process to see who's hammering the kernel:**
 
-```
+```bash
 bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
 ```
 
-# Per-process tracers
+## Per-process tracers
 
 *Scope: per-process · Data: event-based (tracing) · Role: observability · Cost: high.* These stop and start the target to inspect it, so overhead is severe — fine on a test box, risky in production. Where a system-wide tracer with a PID filter (`perf`, `bpftrace -p`) can do the job, prefer it.
 
-## strace
+### strace
 
 Traces the system calls a process makes, with arguments and return values — superb for seeing exactly what a program asks the kernel to do, and why a call fails. But it's breakpoint-based (ptrace) and can slow the target by 100× or more.
 
-```
+```bash
 strace -f -e trace=<SYSCALLS> -p <PID>
 strace -f -e trace=openat,read -p 18733
 strace -c -p <PID>
@@ -874,15 +871,15 @@ strace -c -p <PID>
 
 **In the field — why can't splunkd open a file? Catch the failing opens:**
 
-```
+```bash
 strace -f -e trace=openat -p <PID> 2>&1 | grep ENOENT
 ```
 
-## gdb
+### gdb
 
 A source-level debugger. In a performance context it's an occasional tool — grabbing a stack from a stuck process, or reading a variable no stat exposes — rather than a tracer you'd leave running.
 
-```
+```bash
 gdb -p <PID>
 (gdb) thread apply all bt
 (gdb) detach
@@ -895,19 +892,19 @@ gdb -p <PID>
 
 **In the field — grab all thread stacks from a hung process, non-interactively:**
 
-```
+```bash
 gdb -p <PID> -batch -ex 'thread apply all bt' 2>/dev/null
 ```
 
-# Monitoring tools
+## Monitoring tools
 
 *Scope: system-wide · Data: counters · Role: observability + history.* Monitoring records statistics *continuously* so the data exists when you need it later. This is what turns “80% busy” into “busy, and climbing all week.”
 
-## sar
+### sar
 
 The System Activity Reporter: counter-based, collects on a cron schedule, and keeps a rolling archive you can replay. An essential tool that solves many issues on its own.
 
-```
+```bash
 sar -<OPTION> [-n <GROUP>]
 sar -u -n TCP,ETCP           # read today's archive
 sar -n TCP <INTERVAL> <COUNT>    # live mode
@@ -922,36 +919,36 @@ sar -n TCP 1 5
 
 **In the field — replay a past day's CPU to find when it spiked (\<DD\> = day of month):**
 
-```
+```bash
 sar -u -f /var/log/sysstat/sa<DD>
 ```
 
-## sadf
+### sadf
 
 The companion that reformats sar's archive into portable formats for tooling and dashboards.
 
-```
+```bash
 sadf -<FORMAT> -- <SAR_OPTIONS>
 sadf -j -- -n TCP      # JSON
 sadf -d -- -n TCP      # CSV
 ```
 
 - **-\<FORMAT\>** — output format: `-j` JSON (parse with `jq`), `-d` CSV (for databases), `-g` SVG.
-- **-- SAR\_OPTIONS** — everything after `--` is passed through to sar to select the stats.
+- **-- \<SAR_OPTIONS\>** — everything after `--` is passed through to sar to select the stats.
 
 **In the field — export a day's CPU history to CSV for a spreadsheet:**
 
-```
+```bash
 sadf -d /var/log/sysstat/sa<DD> -- -u > cpu.csv
 ```
 
-## SNMP
+### SNMP
 
 The traditional network-monitoring protocol. Many devices and OSes expose basic metrics over it by default, so no agent install is needed — but it hasn't kept pace with modern application metrics, and most shops have moved to agents.
 
 - Not a command you run so much as a data source polled by a monitoring server. Useful mainly for network gear and appliances that expose nothing else.
 
-## Agents: PCP, Prometheus, collectd
+### Agents: PCP, Prometheus, collectd
 
 *Scope: system-wide + application · Role: monitoring.* Modern monitoring runs an agent (exporter/plugin) on each host that reads kernel and application metrics and ships them to a central store with a dashboard.
 
@@ -960,7 +957,7 @@ The traditional network-monitoring protocol. Many devices and OSes expose basic 
 - **collectd** — a lightweight daemon with many plugins; often feeds a time-series database.
 - The key insight: the system statistics these expose are the *same* kernel counters the CLI tools read — learning the tools makes you fluent in the dashboards, even if you never type the commands.
 
-# Static configuration-at-rest tools
+## Static configuration-at-rest tools
 
 *Role: static (not observability) · Data: config, not activity.* These examine the system *at rest* — what hardware exists, how it's configured, what limits are set — rather than what it's doing under load. Run them early: a surprising number of “performance problems” are really a misconfiguration, and these are free to rule out. Most need no workload and take few or no parameters.
 
@@ -994,21 +991,21 @@ A few parameter notes:
 
 **In the field — the config checks worth running during an incident:**
 
-```
+```bash
 smartctl -l error /dev/sda               # read a suspect disk's error log
 ethtool -S eth0 | grep -iE 'drop|err'    # NIC drops and errors
 sysctl net.core.somaxconn vm.swappiness  # check specific tunables
 ```
 
-# Specialist & observability-source utilities
+## Specialist & observability-source utilities
 
 *Role: observability · mixed scope.* A handful of tools that tap specific kernel sources — netlink, delay accounting, per-NIC counters, PMCs/MSRs — worth knowing when the general tools don't reach.
 
-## ss
+### ss
 
 Socket statistics via the netlink binary interface — faster and richer than the legacy netstat. The go-to for connection state and per-socket TCP detail.
 
-```
+```bash
 ss -tiepn
 ss -ti state established
 ```
@@ -1020,15 +1017,15 @@ ss -ti state established
 
 **In the field — count sockets stuck in TIME-WAIT (connection churn):**
 
-```
+```bash
 ss -tan state time-wait | wc -l
 ```
 
-## nicstat
+### nicstat
 
 Per-network-interface throughput and utilisation — the network equivalent of iostat, filling a gap the default tools leave.
 
-```
+```bash
 nicstat <INTERVAL> <COUNT>
 nicstat 1 5
 ```
@@ -1038,15 +1035,15 @@ nicstat 1 5
 
 **In the field — watch one interface against its link speed during a throughput complaint:**
 
-```
+```bash
 nicstat -i eth0 1
 ```
 
-## tiptop
+### tiptop
 
 A top-like live view powered by PMCs — shows per-process IPC (instructions per cycle) and cache-miss rates, i.e. CPU *efficiency*, not just busyness.
 
-```
+```bash
 tiptop
 ```
 
@@ -1055,15 +1052,15 @@ tiptop
 
 **In the field — log CPU efficiency non-interactively every 5s:**
 
-```
+```bash
 tiptop -b -d 5
 ```
 
-## getdelays
+### getdelays
 
 Reads per-task delay accounting — time spent *waiting* on the CPU run-queue, block I/O, swapping, or memory reclaim. Directly answers “is it slow because it's working, or because it's waiting?”
 
-```
+```bash
 getdelays -d -p <PID>
 ```
 
@@ -1073,15 +1070,15 @@ getdelays -d -p <PID>
 
 **In the field — is the busy splunkd waiting on the run-queue or on disk?**
 
-```
+```bash
 getdelays -d -p $(pgrep -o splunkd)
 ```
 
-## rdmsr / wrmsr (msr-tools)
+### rdmsr / wrmsr (msr-tools)
 
 Read and write model-specific registers — the low-level source behind PMCs, plus clock, temperature, and power data. Niche, but the accurate source for some CPU metrics.
 
-```
+```bash
 rdmsr [-p <CPU>] <REGISTER>
 rdmsr -p 0 0x10
 ```
@@ -1092,7 +1089,7 @@ rdmsr -p 0 0x10
 
 **Cloud caveat for this whole section:** tiptop, rdmsr, and turbostat all depend on PMC/MSR access that many cloud hypervisors withhold from guests. Check per instance type — some AWS bare-metal and larger Nitro sizes expose them, most smaller guests don't.
 
-# The tracing frameworks compared
+## The tracing frameworks compared
 
 Four of the system-wide tracers above are really *frameworks* — big enough that choosing between them is its own decision. Two more round out the landscape. All draw on the same event sources (tracepoints, kprobes, uprobes, USDT, PMCs); they differ in ergonomics and what they're best at.
 
